@@ -1,3 +1,3 @@
-# The OH Moves integration
+# The OH Runkeeper integration
 
-[![Build Status](https://travis-ci.org/OpenHumans/oh-moves-source.svg?branch=master)](https://travis-ci.org/OpenHumans/oh-moves-soure)
+[![Build Status](https://travis-ci.org/OpenHumans/oh-runkeeper-source.svg?branch=master)](https://travis-ci.org/OpenHumans/oh-runkeeper-soure)

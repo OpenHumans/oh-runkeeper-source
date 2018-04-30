@@ -49,13 +49,13 @@ def complete(request):
         context = {'oh_id': oh_member.oh_id,
                    'oh_proj_page': settings.OH_ACTIVITY_PAGE}
         if not hasattr(oh_member, 'datasourcemember'):
-            moves_url = ('https://runkeeper.com/apps/authorize?'
-                         'response_type=code&'
-                         'redirect_uri={}&client_id={}').format(
+            runkeeper_url = ('https://runkeeper.com/apps/authorize?'
+                             'response_type=code&'
+                             'redirect_uri={}&client_id={}').format(
                             settings.RUNKEEPER_REDIRECT_URI,
                             settings.RUNKEEPER_CLIENT_ID)
-            logger.debug(moves_url)
-            context['moves_url'] = moves_url
+            logger.debug(runkeeper_url)
+            context['runkeeper_url'] = runkeeper_url
             return render(request, 'main/complete.html',
                           context=context)
         return redirect("/dashboard")
@@ -95,7 +95,7 @@ def dashboard(request):
     return redirect("/")
 
 
-def remove_moves(request):
+def remove_runkeeper(request):
     if request.method == "POST" and request.user.is_authenticated:
         try:
             oh_member = request.user.oh_member
@@ -103,11 +103,11 @@ def remove_moves(request):
                             oh_member.oh_id,
                             file_basename="Runkeeper")
             messages.info(request, "Your Runkeeper account has been removed")
-            moves_account = request.user.oh_member.datasourcemember
-            moves_account.delete()
+            runkeeper_account = request.user.oh_member.datasourcemember
+            runkeeper_account.delete()
         except:
-            moves_account = request.user.oh_member.datasourcemember
-            moves_account.delete()
+            runkeeper_account = request.user.oh_member.datasourcemember
+            runkeeper_account.delete()
             messages.info(request, ("Something went wrong, please"
                           "re-authorize us on Open Humans"))
             logout(request)
@@ -130,9 +130,9 @@ def update_data(request):
         return redirect('/dashboard')
 
 
-def moves_complete(request):
+def runkeeper_complete(request):
     """
-    Receive user from Moves. Store data, start processing.
+    Receive user from Runkeeper. Store data, start processing.
     """
     logger.debug("Received user returning from Runkeeper.")
     # Exchange code for token.

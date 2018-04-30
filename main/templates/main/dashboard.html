@@ -37,7 +37,7 @@
         <br/>
         <p>You want do remove your current Runkeeper account and maybe replace with
           with a different one? Click below to remove your current Runkeeper account</p>
-        <form action="{% url 'remove_moves' %}" method="post">
+        <form action="{% url 'remove_runkeeper' %}" method="post">
           {% csrf_token %}
           <input type="submit"
             value="Disconnect Runkeeper"
