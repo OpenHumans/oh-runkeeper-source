@@ -6,7 +6,7 @@ from django.shortcuts import render, redirect
 from django.conf import settings
 from open_humans.models import OpenHumansMember
 from .models import DataSourceMember
-from .helpers import get_moves_file, check_update
+from .helpers import get_runkeeper_file, check_update
 from datauploader.tasks import process_moves
 from ohapi import api
 import arrow
@@ -49,11 +49,11 @@ def complete(request):
         context = {'oh_id': oh_member.oh_id,
                    'oh_proj_page': settings.OH_ACTIVITY_PAGE}
         if not hasattr(oh_member, 'datasourcemember'):
-            moves_url = ('https://api.moves-app.com/oauth/v1/authorize?'
-                         'response_type=code&scope=activity location&'
+            moves_url = ('https://runkeeper.com/apps/authorize?'
+                         'response_type=code&'
                          'redirect_uri={}&client_id={}').format(
-                            settings.MOVES_REDIRECT_URI,
-                            settings.MOVES_CLIENT_ID)
+                            settings.RUNKEEPER_REDIRECT_URI,
+                            settings.RUNKEEPER_CLIENT_ID)
             logger.debug(moves_url)
             context['moves_url'] = moves_url
             return render(request, 'main/complete.html',
@@ -67,25 +67,25 @@ def complete(request):
 def dashboard(request):
     if request.user.is_authenticated:
         if hasattr(request.user.oh_member, 'datasourcemember'):
-            moves_member = request.user.oh_member.datasourcemember
-            download_file = get_moves_file(request.user.oh_member)
+            runkeeper_member = request.user.oh_member.datasourcemember
+            download_file = get_runkeeper_file(request.user.oh_member)
             if download_file == 'error':
                 logout(request)
                 return redirect("/")
             connect_url = ''
-            allow_update = check_update(moves_member)
+            allow_update = check_update(runkeeper_member)
         else:
             allow_update = False
-            moves_member = ''
+            runkeeper_member = ''
             download_file = ''
-            connect_url = ('https://api.moves-app.com/oauth/v1/authorize?'
-                           'response_type=code&scope=activity location&'
+            connect_url = ('https://runkeeper.com/apps/authorize?'
+                           'response_type=code&'
                            'redirect_uri={}&client_id={}').format(
-                            settings.MOVES_REDIRECT_URI,
-                            settings.MOVES_CLIENT_ID)
+                            settings.RUNKEEPER_REDIRECT_URI,
+                            settings.RUNKEEPER_CLIENT_ID)
         context = {
             'oh_member': request.user.oh_member,
-            'moves_member': moves_member,
+            'runkeeper_member': runkeeper_member,
             'download_file': download_file,
             'connect_url': connect_url,
             'allow_update': allow_update
@@ -101,8 +101,8 @@ def remove_moves(request):
             oh_member = request.user.oh_member
             api.delete_file(oh_member.access_token,
                             oh_member.oh_id,
-                            file_basename="moves-storyline-data.json")
-            messages.info(request, "Your Moves account has been removed")
+                            file_basename="Runkeeper")
+            messages.info(request, "Your Runkeeper account has been removed")
             moves_account = request.user.oh_member.datasourcemember
             moves_account.delete()
         except:
@@ -119,11 +119,11 @@ def update_data(request):
     if request.method == "POST" and request.user.is_authenticated:
         oh_member = request.user.oh_member
         process_moves.delay(oh_member.oh_id)
-        moves_member = oh_member.datasourcemember
-        moves_member.last_submitted = arrow.now().format()
-        moves_member.save()
+        runkeeper_member = oh_member.datasourcemember
+        runkeeper_member.last_submitted = arrow.now().format()
+        runkeeper_member.save()
         messages.info(request,
-                      ("An update of your Moves data has been started! "
+                      ("An update of your Runkeeper data has been started! "
                        "It can take some minutes before the first data is "
                        "available. Reload this page in a while to find your "
                        "data"))
@@ -134,41 +134,41 @@ def moves_complete(request):
     """
     Receive user from Moves. Store data, start processing.
     """
-    logger.debug("Received user returning from Moves.")
+    logger.debug("Received user returning from Runkeeper.")
     # Exchange code for token.
     # This creates an OpenHumansMember and associated user account.
     code = request.GET.get('code', '')
     ohmember = request.user.oh_member
-    moves_member = moves_code_to_member(code=code, ohmember=ohmember)
+    runkeeper_member = runkeeper_code_to_member(code=code, ohmember=ohmember)
 
-    if moves_member:
-        messages.info(request, "Your Moves account has been connected")
+    if runkeeper_member:
+        messages.info(request, "Your Runkeeper account has been connected")
         process_moves.delay(ohmember.oh_id)
         return redirect('/dashboard')
 
     logger.debug('Invalid code exchange. User returned to starting page.')
     messages.info(request, ("Something went wrong, please try connecting your "
-                            "Moves account again"))
+                            "Runkeeper account again"))
     return redirect('/dashboard')
 
 
-def moves_code_to_member(code, ohmember):
+def runkeeper_code_to_member(code, ohmember):
     """
-    Exchange code for token, use this to create and return Moves members.
-    If a matching moves exists, update and return it.
+    Exchange code for token, use this to create and return Runkeeper members.
+    If a matching Runkeeper member exists, update and return it.
     """
     print("FOOBAR.")
-    if settings.MOVES_CLIENT_SECRET and \
-       settings.MOVES_CLIENT_ID and code:
+    if settings.RUNKEEPER_CLIENT_SECRET and \
+       settings.RUNKEEPER_CLIENT_ID and code:
         data = {
             'grant_type': 'authorization_code',
-            'redirect_uri': settings.MOVES_REDIRECT_URI,
+            'redirect_uri': settings.RUNKEEPER_REDIRECT_URI,
             'code': code,
-            'client_id': settings.MOVES_CLIENT_ID,
-            'client_secret': settings.MOVES_CLIENT_SECRET
+            'client_id': settings.RUNKEEPER_CLIENT_ID,
+            'client_secret': settings.RUNKEEPER_CLIENT_SECRET
         }
         req = requests.post(
-            'https://api.moves-app.com/oauth/v1/access_token'.format(
+            'https://runkeeper.com/apps/token'.format(
                 settings.OPENHUMANS_OH_BASE_URL),
             data=data
         )
@@ -176,36 +176,33 @@ def moves_code_to_member(code, ohmember):
         print(data)
         if 'access_token' in data:
             try:
-                moves_member = DataSourceMember.objects.get(
-                    moves_id=data['user_id'])
+                runkeeper_member = ohmember.datasourcemember
                 logger.debug('Member {} re-authorized.'.format(
-                    moves_member.moves_id))
-                moves_member.access_token = data['access_token']
-                moves_member.refresh_token = data['refresh_token']
-                moves_member.token_expires = DataSourceMember.get_expiration(
-                    data['expires_in'])
-                print('got old moves member')
+                    runkeeper_member.runkeeper_id))
+                runkeeper_member.access_token = data['access_token']
+                print('got old Runkeeper member')
             except DataSourceMember.DoesNotExist:
-                moves_member = DataSourceMember(
-                    moves_id=data['user_id'],
-                    access_token=data['access_token'],
-                    refresh_token=data['refresh_token'],
-                    token_expires=DataSourceMember.get_expiration(
-                        data['expires_in'])
-                        )
-                moves_member.user = ohmember
-                logger.debug('Member {} created.'.format(data['user_id']))
-                print('make new moves member')
-            moves_member.save()
+                runkeeper_member = DataSourceMember(
+                    access_token=data['access_token'])
+                runkeeper_member.user = ohmember
+                prof = "https://api.runkeeper.com/user?access_token={}".format(
+                    data['access_token']
+                )
+                profile_response = requests.get(prof)
+                runkeeper_id = profile_response.json()['userID']
+                runkeeper_member.runkeeper_id = runkeeper_id
+                logger.debug('Member {} created.'.format(runkeeper_id))
+                print('make new Runkeeper member')
+            runkeeper_member.save()
 
-            return moves_member
+            return runkeeper_member
 
         elif 'error' in req.json():
             logger.debug('Error in token exchange: {}'.format(req.json()))
         else:
-            logger.warning('Neither token nor error info in Moves response!')
+            logger.warning('Neither token nor error info in RK response!')
     else:
-        logger.error('MOVES_CLIENT_SECRET or code are unavailable')
+        logger.error('RUNKEEPER_CLIENT_SECRET or code are unavailable')
     return None
 
 

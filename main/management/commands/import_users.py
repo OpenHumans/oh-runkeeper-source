@@ -42,8 +42,8 @@ class Command(BaseCommand):
                 )
                 moves_member.user = oh_member
                 moves_member._refresh_tokens(
-                    client_id=settings.MOVES_CLIENT_ID,
-                    client_secret=settings.MOVES_CLIENT_SECRET
+                    client_id=settings.RUNKEEPER_CLIENT_ID,
+                    client_secret=settings.RUNKEEPER_CLIENT_SECRET
                 )
                 process_moves.delay(oh_member.oh_id)
                 # process_moves(oh_member.oh_id)
