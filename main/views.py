@@ -7,7 +7,7 @@ from django.conf import settings
 from open_humans.models import OpenHumansMember
 from .models import DataSourceMember
 from .helpers import get_runkeeper_file, check_update
-from datauploader.tasks import process_moves
+from datauploader.tasks import process_runkeeper
 from ohapi import api
 import arrow
 
@@ -118,7 +118,7 @@ def remove_moves(request):
 def update_data(request):
     if request.method == "POST" and request.user.is_authenticated:
         oh_member = request.user.oh_member
-        process_moves.delay(oh_member.oh_id)
+        process_runkeeper.delay(oh_member.oh_id)
         runkeeper_member = oh_member.datasourcemember
         runkeeper_member.last_submitted = arrow.now().format()
         runkeeper_member.save()
@@ -143,7 +143,7 @@ def moves_complete(request):
 
     if runkeeper_member:
         messages.info(request, "Your Runkeeper account has been connected")
-        process_moves.delay(ohmember.oh_id)
+        process_runkeeper.delay(ohmember.oh_id)
         return redirect('/dashboard')
 
     logger.debug('Invalid code exchange. User returned to starting page.')

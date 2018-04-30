@@ -15,4 +15,4 @@ class Command(BaseCommand):
                 oh_id = moves_user.user.oh_id
                 process_moves.delay(oh_id)
             else:
-                print("didn't update {}".format(moves_user.moves_id))
+                print("didn't update {}".format(moves_user.runkeeper_id))
