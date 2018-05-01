@@ -36,6 +36,7 @@ def complete(request):
     # Exchange code for token.
     # This creates an OpenHumansMember and associated user account.
     code = request.GET.get('code', '')
+    print("GOT TO COMPLETE PAGE")
     oh_member = oh_code_to_member(code=code)
 
     if oh_member:
