@@ -148,14 +148,12 @@ def process_runkeeper(oh_id):
     runkeeper_member.runkeeper_id = user_data['userID']
 
     # Get activity data.
-    print('start getting activity data')
     fitness_activity_path = '{}?pageSize={}'.format(
         user_data['fitness_activities'], PAGESIZE)
     fitness_activity_items, complete_fitness_activity_years = yearly_items(
         get_items(path=fitness_activity_path, access_token=access_token))
 
     # Background activities.
-    print('start getting background data')
     background_activ_path = '{}?pageSize={}'.format(
         user_data['background_activities'], PAGESIZE)
     background_activ_items, complete_background_activ_years = yearly_items(
@@ -174,7 +172,6 @@ def process_runkeeper(oh_id):
             fitness_activity_items.get(year, []),
             key=lambda item: datetime.strptime(
                 item['start_time'], '%a, %d %b %Y %H:%M:%S'))
-        print('iterate over data for year {}'.format(year))
         for item in fitness_items:
             item_data = runkeeper_query(item['uri'], access_token)
             item_data_out = data_for_keys(item_data, FITNESS_SUMMARY_KEYS)
@@ -182,7 +179,6 @@ def process_runkeeper(oh_id):
                 data_for_keys(datapoint, FITNESS_PATH_KEYS)
                 for datapoint in item_data['path']]
             outdata['fitness_activities'].append(item_data_out)
-        print('got all data for year {}'.format(year))
         background_items = sorted(
             background_activ_items.get(year, []),
             key=lambda item: datetime.strptime(
@@ -195,7 +191,6 @@ def process_runkeeper(oh_id):
         filename = 'Runkeeper-activity-data-{}.json'.format(str(year))
         temp_directory = tempfile.mkdtemp()
         filepath = os.path.join(temp_directory, filename)
-        print('write data for year {}'.format(year))
         with open(filepath, 'w') as f:
             json.dump(outdata, f, indent=2, sort_keys=True)
             f.flush()
@@ -207,11 +202,9 @@ def process_runkeeper(oh_id):
             'dataYear': year,
             'complete': year in all_completed_years,
         }
-        print('delete old data for year {}'.format(year))
         api.delete_file(oh_member.access_token,
                         oh_member.oh_id,
                         file_basename=filename)
-        print('upload data for year {}'.format(year))
         api.upload_aws(filepath, metadata,
                        oh_access_token,
                        project_member_id=oh_member.oh_id)

@@ -157,7 +157,6 @@ def runkeeper_code_to_member(code, ohmember):
     Exchange code for token, use this to create and return Runkeeper members.
     If a matching Runkeeper member exists, update and return it.
     """
-    print("FOOBAR.")
     if settings.RUNKEEPER_CLIENT_SECRET and \
        settings.RUNKEEPER_CLIENT_ID and code:
         data = {
@@ -173,7 +172,6 @@ def runkeeper_code_to_member(code, ohmember):
             data=data
         )
         data = req.json()
-        print(data)
         if 'access_token' in data:
             try:
                 runkeeper_member = ohmember.datasourcemember
