@@ -4,22 +4,21 @@ import arrow
 from datetime import timedelta
 
 
-def get_moves_file(oh_member):
+def get_runkeeper_file(oh_member):
     try:
         oh_access_token = oh_member.get_access_token(
-                                client_id=settings.OPENHUMANS_CLIENT_ID,
-                                client_secret=settings.OPENHUMANS_CLIENT_SECRET)
+                            client_id=settings.OPENHUMANS_CLIENT_ID,
+                            client_secret=settings.OPENHUMANS_CLIENT_SECRET)
         user_object = api.exchange_oauth2_member(oh_access_token)
         for dfile in user_object['data']:
-            if 'Moves' in dfile['metadata']['tags']:
+            if 'Runkeeper' in dfile['metadata']['tags']:
                 return dfile['download_url']
         return ''
-
     except:
         return 'error'
 
 
-def check_update(moves_member):
-    if moves_member.last_submitted < (arrow.now() - timedelta(hours=1)):
+def check_update(runkeeper_member):
+    if runkeeper_member.last_submitted < (arrow.now() - timedelta(hours=1)):
         return True
     return False

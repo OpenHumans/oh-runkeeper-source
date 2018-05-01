@@ -13,126 +13,202 @@ from celery import shared_task
 from django.conf import settings
 from open_humans.models import OpenHumansMember
 from datetime import datetime, timedelta
-from demotemplate.settings import rr
-from requests_respectful import RequestsRespectfulRateLimitedError
 from ohapi import api
 import arrow
 
 # Set up logging.
 logger = logging.getLogger(__name__)
 
-MOVES_API_BASE = 'https://api.moves-app.com/api/1.1'
-MOVES_API_STORY = MOVES_API_BASE + '/user/storyline/daily'
+BACKGROUND_DATA_KEYS = ['timestamp', 'steps', 'calories_burned', 'source']
+FITNESS_SUMMARY_KEYS = ['type', 'equipment', 'start_time', 'utc_offset',
+                        'total_distance', 'duration', 'total_calories',
+                        'climb', 'source']
+FITNESS_PATH_KEYS = ['latitude', 'longitude', 'altitude', 'timestamp', 'type']
+
+PAGESIZE = '10000'
+
+
+def data_for_keys(data_dict, data_keys):
+    """
+    Return a dict with data for requested keys, or empty strings if missing.
+    """
+    return {x: data_dict[x] if x in data_dict else '' for x in data_keys}
+
+
+def yearly_items(items):
+    current_year = (datetime.now() - timedelta(days=1)).year
+
+    result = {}
+    complete_years = []
+
+    for item in items:
+        try:
+            time_string = item['start_time']
+        except KeyError:
+            time_string = item['timestamp']
+
+        start_time = datetime.strptime(time_string, '%a, %d %b %Y %H:%M:%S')
+
+        if start_time.year not in result:
+            result[start_time.year] = []
+
+            if start_time.year < current_year:
+                complete_years.append(start_time.year)
+
+        result[start_time.year].append(item)
+
+    return result, complete_years
+
+
+def runkeeper_query(path, access_token, content_type=None):
+    """
+    Query RunKeeper API and return data.
+    """
+    headers = {'Authorization': 'Bearer {}'.format(access_token)}
+
+    if content_type:
+        headers['Content-Type'] = content_type
+
+    data_url = 'https://api.runkeeper.com{}'.format(path)
+
+    data_response = requests.get(data_url, headers=headers)
+    data = data_response.json()
+
+    return data
+
+
+def get_items(path, access_token, recurse='both'):
+    """
+    Iterate to get all items for a given access_token and path.
+
+    RunKeeper uses the same pages format for items in various places.
+    """
+    query_data = runkeeper_query(path, access_token)
+    items = query_data['items']
+
+    if 'previous' in query_data and recurse in ['both', 'prev']:
+        prev_items = get_items(query_data['previous'], access_token,
+                               recurse='prev')
+        items = prev_items + items
+
+    if 'next' in query_data and recurse in ['both', 'next']:
+        next_items = get_items(query_data['next'],
+                               access_token,
+                               recurse='next')
+        items = items + next_items
+
+    if recurse == 'both':
+        # Assert we have correct size.
+        if len(items) != query_data['size']:
+            error_msg = ('Activity items for retrieved for {} ({}) '
+                         "doesn't match expected array size ({})").format(
+                             path, len(items), query_data['size'])
+            raise AssertionError(error_msg)
+
+    return items
 
 
 @shared_task
-def process_moves(oh_id):
+def process_runkeeper(oh_id):
     """
-    Update the moves file for a given OH user
+    Data is split per-year, in JSON format.
+    Each JSON is an object (dict) in the following format (pseudocode):
+
+    { 'background_activities':
+        [
+          { key: value for each of BACKGROUND_DATA_KEYS },
+          { key: value for each of BACKGROUND_DATA_KEYS },
+          ...
+        ],
+      'fitness_activities':
+        [
+          { 'path': { key: value for each of FITNESS_PATH_KEYS },
+             and key: value for each of the FITNESS_ACTIVITY_KEYS },
+          { 'path': { key: value for each of FITNESS_PATH_KEYS },
+             and key: value for each of the FITNESS_ACTIVITY_KEYS },
+          ...
+        ]
+    }
+
+    Notes:
+        - items are sorted according to start_time or timestamp
+        - The item_uri for fitness_activities matches item_uri in
+          fitness_activity_sharing.
     """
-    logger.debug('Starting moves processing for {}'.format(oh_id))
     oh_member = OpenHumansMember.objects.get(oh_id=oh_id)
     oh_access_token = oh_member.get_access_token(
                             client_id=settings.OPENHUMANS_CLIENT_ID,
                             client_secret=settings.OPENHUMANS_CLIENT_SECRET)
-    moves_data = get_existing_moves(oh_access_token)
-    moves_member = oh_member.datasourcemember
-    moves_access_token = moves_member.get_access_token(
-                            client_id=settings.MOVES_CLIENT_ID,
-                            client_secret=settings.MOVES_CLIENT_SECRET)
-    update_moves(oh_member, moves_access_token, moves_data)
+    runkeeper_member = oh_member.datasourcemember
+    print('start processing data for {}'.format(
+                            runkeeper_member.runkeeper_id))
 
+    access_token = runkeeper_member.access_token
+    user_data = runkeeper_query('/user', access_token)
+    runkeeper_member.runkeeper_id = user_data['userID']
 
-def update_moves(oh_member, moves_access_token, moves_data):
-    try:
-        start_date = get_start_date(moves_data, moves_access_token)
-        start_date = datetime.strptime(start_date, "%Y%m%d")
-        start_date_iso = start_date.isocalendar()[:2]
-        moves_data = remove_partial_data(moves_data, start_date_iso)
-        stop_date_iso = (datetime.utcnow()
-                         + timedelta(days=7)).isocalendar()[:2]
-        while start_date_iso != stop_date_iso:
-            print('processing {}-{} for member {}'.format(start_date_iso[0],
-                                                          start_date_iso[1],
-                                                          oh_member.oh_id))
-            query = MOVES_API_STORY + \
-                     '/{0}-W{1}?trackPoints=true&access_token={2}'.format(
-                        start_date_iso[0],
-                        start_date_iso[1],
-                        moves_access_token
-                     )
-            response = rr.get(query, realms=['moves'])
-            moves_data += response.json()
-            start_date = start_date + timedelta(days=7)
-            start_date_iso = start_date.isocalendar()[:2]
-        print('successfully finished update for {}'.format(oh_member.oh_id))
-        moves_member = oh_member.datasourcemember
-        moves_member.last_updated = arrow.now().format()
-        moves_member.save()
-    except RequestsRespectfulRateLimitedError:
-        logger.debug(
-            'requeued processing for {} with 60 secs delay'.format(
-                oh_member.oh_id)
-                )
-        process_moves.apply_async(args=[oh_member.oh_id], countdown=61)
-    finally:
-        replace_moves(oh_member, moves_data)
+    # Get activity data.
+    fitness_activity_path = '{}?pageSize={}'.format(
+        user_data['fitness_activities'], PAGESIZE)
+    fitness_activity_items, complete_fitness_activity_years = yearly_items(
+        get_items(path=fitness_activity_path, access_token=access_token))
 
+    # Background activities.
+    background_activ_path = '{}?pageSize={}'.format(
+        user_data['background_activities'], PAGESIZE)
+    background_activ_items, complete_background_activ_years = yearly_items(
+        get_items(background_activ_path, access_token))
 
-def replace_moves(oh_member, moves_data):
-    # delete old file and upload new to open humans
-    tmp_directory = tempfile.mkdtemp()
-    metadata = {
-        'description':
-        'Moves GPS maps, locations, and steps data.',
-        'tags': ['GPS', 'Moves', 'steps'],
-        'updated_at': str(datetime.utcnow()),
+    all_years = sorted(set(list(fitness_activity_items.keys()) +
+                           list(background_activ_items.keys())))
+    all_completed_years = set(
+        complete_fitness_activity_years + complete_background_activ_years)
+
+    for year in all_years:
+        outdata = {'fitness_activities': [],
+                   'background_activities': []}
+
+        fitness_items = sorted(
+            fitness_activity_items.get(year, []),
+            key=lambda item: datetime.strptime(
+                item['start_time'], '%a, %d %b %Y %H:%M:%S'))
+        for item in fitness_items:
+            item_data = runkeeper_query(item['uri'], access_token)
+            item_data_out = data_for_keys(item_data, FITNESS_SUMMARY_KEYS)
+            item_data_out['path'] = [
+                data_for_keys(datapoint, FITNESS_PATH_KEYS)
+                for datapoint in item_data['path']]
+            outdata['fitness_activities'].append(item_data_out)
+        background_items = sorted(
+            background_activ_items.get(year, []),
+            key=lambda item: datetime.strptime(
+                item['timestamp'], '%a, %d %b %Y %H:%M:%S'))
+
+        for item in background_items:
+            outdata['background_activities'].append(
+                data_for_keys(item, BACKGROUND_DATA_KEYS))
+
+        filename = 'Runkeeper-activity-data-{}.json'.format(str(year))
+        temp_directory = tempfile.mkdtemp()
+        filepath = os.path.join(temp_directory, filename)
+        with open(filepath, 'w') as f:
+            json.dump(outdata, f, indent=2, sort_keys=True)
+            f.flush()
+
+        metadata = {
+            'description': ('Runkeeper GPS maps and imported '
+                            'activity data.'),
+            'tags': ['GPS', 'Runkeeper'],
+            'dataYear': year,
+            'complete': year in all_completed_years,
         }
-    out_file = os.path.join(tmp_directory, 'moves-storyline-data.json')
-    logger.debug('deleted old file for {}'.format(oh_member.oh_id))
-    api.delete_file(oh_member.access_token,
-                    oh_member.oh_id,
-                    file_basename="moves-storyline-data.json")
-    with open(out_file, 'w') as json_file:
-        json.dump(moves_data, json_file)
-        json_file.flush()
-    api.upload_aws(out_file, metadata,
-                   oh_member.access_token,
-                   project_member_id=oh_member.oh_id)
-    logger.debug('uploaded new file for {}'.format(oh_member.oh_id))
-
-
-def remove_partial_data(moves_data, start_date):
-    remove_indexes = []
-    for i, element in enumerate(moves_data):
-        element_date = datetime.strptime(
-                                element['date'], "%Y%m%d").isocalendar()[:2]
-        if element_date == start_date:
-            remove_indexes.append(i)
-    for index in sorted(remove_indexes, reverse=True):
-        del moves_data[index]
-    return moves_data
-
-
-def get_start_date(moves_data, moves_access_token):
-    if moves_data == []:
-        url = MOVES_API_BASE + "/user/profile?access_token={}".format(
-                                        moves_access_token
-        )
-        response = rr.get(url, wait=True, realms=['moves'])
-        return response.json()['profile']['firstDate']
-    else:
-        return moves_data[-1]['date']
-
-
-def get_existing_moves(oh_access_token):
-    member = api.exchange_oauth2_member(oh_access_token)
-    for dfile in member['data']:
-        if 'Moves' in dfile['metadata']['tags']:
-            # get file here and read the json into memory
-            tf_in = tempfile.NamedTemporaryFile(suffix='.json')
-            tf_in.write(requests.get(dfile['download_url']).content)
-            tf_in.flush()
-            moves_data = json.load(open(tf_in.name))
-            return moves_data
-    return []
+        api.delete_file(oh_member.access_token,
+                        oh_member.oh_id,
+                        file_basename=filename)
+        api.upload_aws(filepath, metadata,
+                       oh_access_token,
+                       project_member_id=oh_member.oh_id)
+    runkeeper_member.last_updated = arrow.now().format()
+    runkeeper_member.save()
+    print('finished processing data for {}'.format(
+                            runkeeper_member.runkeeper_id))
