@@ -7,6 +7,7 @@ from open_humans.models import OpenHumansMember
 from main.models import DataSourceMember
 import arrow
 from datauploader.celery import app
+from main.management.commands import import_users
 
 
 class ManagementTestCase(TestCase):
@@ -17,8 +18,9 @@ class ManagementTestCase(TestCase):
     def setUp(self):
         settings.OPENHUMANS_CLIENT_ID = 'oh_client_id'
         settings.OPENHUMANS_CLIENT_SECRET = 'oh_client_secret'
-        settings.MOVES_CLIENT_ID = 'moves_client_id'
-        settings.MOVES_CLIENT_SECRET = 'moves_client_secret'
+        settings.RUNKEEPER_CLIENT_ID = 'RUNKEEPER_CLIENT_ID'
+        settings.RUNKEEPER_CLIENT_SECRET = 'RUNKEEPER_CLIENT_SECRET'
+        app.conf.update(task_always_eager=True)
 
     @freeze_time('2016-06-24')
     @vcr.use_cassette('main/tests/fixtures/import_users.yaml',
@@ -28,14 +30,14 @@ class ManagementTestCase(TestCase):
                          0)
         self.assertEqual(len(DataSourceMember.objects.all()),
                          0)
-        call_command('import_users',
-                     infile='main/tests/fixtures/import_list.txt',
-                     delimiter=',')
+        cmd = import_users.Command()
+        cmd.handle(infile='main/tests/fixtures/import_list.txt',
+                       delimiter=",")
         self.assertEqual(len(OpenHumansMember.objects.all()),
                          1)
         self.assertEqual(len(DataSourceMember.objects.all()),
                          1)
-        self.assertEqual(len(DataSourceMember.objects.filter(moves_id=12345678)),
+        self.assertEqual(len(DataSourceMember.objects.filter(runkeeper_id=12345678)),
                          1)
 
 
@@ -47,8 +49,8 @@ class UpdateTestCase(TestCase):
     def setUp(self):
         settings.OPENHUMANS_CLIENT_ID = 'oh_client_id'
         settings.OPENHUMANS_CLIENT_SECRET = 'oh_client_secret'
-        settings.MOVES_CLIENT_ID = 'moves_client_id'
-        settings.MOVES_CLIENT_SECRET = 'moves_client_secret'
+        settings.RUNKEEPER_CLIENT_ID = 'RUNKEEPER_CLIENT_ID'
+        settings.RUNKEEPER_CLIENT_SECRET = 'RUNKEEPER_CLIENT_SECRET'
         app.conf.update(task_always_eager=True)
         oh_member = OpenHumansMember.create(
                             oh_id=23456789,
@@ -56,22 +58,19 @@ class UpdateTestCase(TestCase):
                             refresh_token="new_oh_refresh_token",
                             expires_in=36000)
         oh_member.save()
-        moves_member = DataSourceMember(
-            moves_id=12345678,
+        runkeeper_member = DataSourceMember(
+            runkeeper_id=12345678,
             access_token="new_moves_access_token",
-            refresh_token='new_moves_refresh_token',
-            token_expires=DataSourceMember.get_expiration(
-                36000),
             last_updated=arrow.get('2016-06-19').format(),
             last_submitted=arrow.get('2016-06-19').format()
         )
-        moves_member.user = oh_member
-        moves_member.save()
+        runkeeper_member.user = oh_member
+        runkeeper_member.save()
 
     @freeze_time('2016-06-24')
     @vcr.use_cassette('main/tests/fixtures/import_users.yaml',
                       record_mode='none')
     def test_update_command(self):
         call_command('update_data')
-        moves_member = DataSourceMember.objects.get(moves_id=12345678)
-        self.assertEqual(moves_member.last_updated, arrow.get('2016-06-24'))
+        runkeeper_member = DataSourceMember.objects.get(runkeeper_id=12345678)
+        self.assertEqual(runkeeper_member.last_updated, arrow.get('2016-06-24'))

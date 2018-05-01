@@ -14,6 +14,7 @@ from django.conf import settings
 from open_humans.models import OpenHumansMember
 from datetime import datetime, timedelta
 from ohapi import api
+import arrow
 
 # Set up logging.
 logger = logging.getLogger(__name__)
@@ -144,6 +145,7 @@ def process_runkeeper(oh_id):
 
     access_token = runkeeper_member.access_token
     user_data = runkeeper_query('/user', access_token)
+    runkeeper_member.runkeeper_id = user_data['userID']
 
     # Get activity data.
     print('start getting activity data')
@@ -213,5 +215,7 @@ def process_runkeeper(oh_id):
         api.upload_aws(filepath, metadata,
                        oh_access_token,
                        project_member_id=oh_member.oh_id)
+    runkeeper_member.last_updated = arrow.now().format()
+    runkeeper_member.save()
     print('finished processing data for {}'.format(
                             runkeeper_member.runkeeper_id))

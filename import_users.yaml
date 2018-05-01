@@ -1,25 +1,5 @@
 interactions:
 - request:
-    body: null
-    headers:
-      Accept: ['*/*']
-      Accept-Encoding: ['gzip, deflate']
-      Authorization: [Bearer codegoeshere]
-      Connection: [keep-alive]
-      User-Agent: [python-requests/2.18.4]
-    method: GET
-    uri: https://api.runkeeper.com/user
-  response:
-    body: {string: '{"settings":"/settings","records":"/records","profile":"/profile","change_log":"/changeLog","strength_training_activities":"/strengthTrainingActivities","weight":"/weight","fitness_activities":"/fitnessActivities","background_activities":"/backgroundActivities","team":"/team","userID":12345678,"sleep":"/sleep","nutrition":"/nutrition","general_measurements":"/generalMeasurements","diabetes":"/diabetes"}'}
-    headers:
-      Connection: [keep-alive]
-      Content-Language: [en-US]
-      Content-Length: ['406']
-      Content-Type: [application/vnd.com.runkeeper.user+json;charset=ISO-8859-1]
-      Date: ['Tue, 01 May 2018 16:50:35 GMT']
-      Server: [Apache-Coyote/1.1]
-    status: {code: 200, message: OK}
-- request:
     body: grant_type=refresh_token&refresh_token=old_oh_refresh_token
     headers:
       Accept: ['*/*']
@@ -172,7 +152,7 @@ interactions:
     method: POST
     uri: https://www.openhumans.org/api/direct-sharing/project/files/upload/direct/?access_token=new_oh_access_token
   response:
-    body: {string: '{"id":41459,"url":"https://myaws.com/member-files/direct-sharing-1337/foobar/Runkeeper-activity-data-2018.json?Signature=signed&Expires=1223&AWSAccessKeyId=key"}'}
+    body: {string: '{"id":41459,"url":"https://open-humans-production.s3.amazonaws.com/member-files/direct-sharing-73/c66ed5a4-4d5f-11e8-94e8-4a428280d07b/Runkeeper-activity-data-2018.json?Signature=8hR6BVsvkt5zItv39SkSkv%2BndvA%3D&Expires=1525215038&AWSAccessKeyId=AKIAIKNTFUJJTNS6N7HA"}'}
     headers:
       Allow: ['POST, OPTIONS']
       Cache-Control: ['no-cache, max-age=0, must-revalidate, no-store']
@@ -201,7 +181,7 @@ interactions:
       Content-Length: ['17057']
       User-Agent: [python-requests/2.18.4]
     method: PUT
-    uri: https://myaws.com/member-files/direct-sharing-1337/foobar/Runkeeper-activity-data-2018.json?Signature=signed&Expires=1223&AWSAccessKeyId=key
+    uri: https://open-humans-production.s3.amazonaws.com/member-files/direct-sharing-73/c66ed5a4-4d5f-11e8-94e8-4a428280d07b/Runkeeper-activity-data-2018.json?Signature=8hR6BVsvkt5zItv39SkSkv%2BndvA%3D&Expires=1525215038&AWSAccessKeyId=AKIAIKNTFUJJTNS6N7HA
   response:
     body: {string: ''}
     headers:
@@ -209,9 +189,9 @@ interactions:
       Date: ['Tue, 01 May 2018 16:50:39 GMT']
       ETag: ['"3cfb5a3f82381a70850df61a9a5702ca"']
       Server: [AmazonS3]
-      x-amz-id-2: [code]
-      x-amz-request-id: [code]
-      x-amz-version-id: [code]
+      x-amz-id-2: [tmqYHNKhD3WWUdMmv09HJtTv0m5qWKN4ujcckZqTi/d1iIteZyhz83HMs9stlmnr2eqGfArCJdI=]
+      x-amz-request-id: [93C85A46CEED0104]
+      x-amz-version-id: [W3vg02ZXGB9It4HF5nfELM.ujGLzppj0]
     status: {code: 200, message: OK}
 - request:
     body: project_member_id=23456789&file_id=41459
