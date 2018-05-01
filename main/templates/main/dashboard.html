@@ -51,12 +51,16 @@
           You can download a copy of your <i>Runkeeper</i> data from here.
         </p>
         {% if download_file %}
+        {%for name, durl in download_file.items %}
+        <p>
         <a
           class="btn btn-success"
-          href="{{download_file}}"
+          href="{{durl}}"
           >
-          Download <i>Runkeeper</i> Data
+          Download <i>{{name}}</i> Data
         </a>
+        </p>
+        {%endfor%}
         {%else%}
         <a
           class="btn btn-default disabled"
