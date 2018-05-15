@@ -11,7 +11,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         users = DataSourceMember.objects.all()
         for runkeeper_user in users:
-            if runkeeper_user.last_submitted < (arrow.now() - timedelta(days=4)):
+            if runkeeper_user.last_updated < (arrow.now() - timedelta(days=4)):
                 oh_id = runkeeper_user.user.oh_id
                 process_runkeeper.delay(oh_id)
             else:
