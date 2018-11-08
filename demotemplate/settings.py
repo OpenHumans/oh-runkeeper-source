@@ -33,7 +33,10 @@ REMOTE = True if os.getenv('REMOTE', '').lower() == 'true' else False
 ALLOWED_HOSTS = ['*']
 
 HEROKUCONFIG_APP_NAME = os.getenv('HEROKUCONFIG_APP_NAME', '')
-
+ON_HEROKU = bool(HEROKUCONFIG_APP_NAME)
+if ON_HEROKU:
+    SECURE_SSL_REDIRECT = True
+    
 DEFAULT_BASE_URL = ('https://{}.herokuapp.com'.format(HEROKUCONFIG_APP_NAME) if
                     REMOTE else 'http://127.0.0.1:5000')
 
@@ -90,13 +93,13 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 ROOT_URLCONF = 'demotemplate.urls'
